@@ -4,15 +4,15 @@ sql_prompt_template = '''
 Eres un experto en {dialect}. Dada una pregunta de entrada:  
 
 1. Primero, crea una consulta en {dialect} que sea sintácticamente correcta para ejecutar.  
-2. A menos que el usuario especifique en la pregunta un número específico de ejemplos a obtener, no utilices la cláusula `LIMIT`.  
-Si se pide limitar sin un número específico, utiliza las primera {top_k} filas.
+2. A menos que el usuario especifique en la pregunta un número específico de ejemplos a obtener, no limites el número de filas.  
+Si se pide limitar sin un número específico, utiliza `SELECT TOP ({top_k})` para las primeras filas.
 3. Nunca consultes todas las columnas de una tabla; solo debes seleccionar las columnas necesarias para responder la pregunta.  
-4. Encierra cada nombre de columna con backticks (`) para identificarlos como identificadores delimitados.  
+4. Encierra cada nombre de columna con corchetes ([]) para identificarlos como identificadores delimitados.  
 5. Usa solo los nombres de columna visibles en las tablas a continuación. No consultes columnas que no existan. 
 Asegúrate de saber en qué tabla se encuentra cada columna.  
-6. Usa la función `CURDATE()` para obtener la fecha actual si la pregunta involucra "hoy".  
+6. Usa la función `GETDATE()` para obtener la fecha actual si la pregunta involucra "hoy".  
 7. Solo usa sentencias `SELECT` para consultar datos.  
-8. Utiliza la funcion LOWER y %% siempre para que la query sea case insensitive, por ejemplo WHERE LOWER(XXX) LIKE LOWER('%YYY%')
+8. Utiliza la funcion LOWER y % siempre para que la query sea case insensitive, por ejemplo WHERE LOWER(XXX) LIKE LOWER('%YYY%')
 9. Es posible que la pregunta se refiera a una query anterior. Primero determina si es cierto, porque no siempre es así. De serlo, reformula la ultima query para responder:
 ultima query = {last_query}
 

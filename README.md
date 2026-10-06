@@ -23,9 +23,6 @@ Este proyecto consiste en la creación de un aplicación para la consulta a base
 │   ├── 📄 Consultor SQL OpenAI y Langchain.ipynb       # Jupyter notebook con el paso a paso
 │   └── 📄 practicas.ipynb                              # Jupyter notebook con 10 preguntas de prueba
 │
-├── 📁 sakila_db                                        # Carpeta con el archivo de la base de datos
-│   └── 📄 sakila.sql                                   # Archivo autocontenido de la base de datos
-│
 ├── 📁 tools                                            # Herramientas 
 │   ├── 📄 __init__.py                                  # Convierte un directorio en un paquete
 │   └── 📄 tools.py                                     # Herramientas (logger)
@@ -105,33 +102,23 @@ Usaremos la base de datos [sakila](https://dev.mysql.com/doc/sakila/en/sakila-in
 
 ## Variables de entorno
 
-Este proyecto necesita de una base de datos SQL (MySQL, PostGres, SQLServer). La URI debe estar escrita en el archivo `.env`. En la platilla de archivo `.env.template` existe un ejemplo de URI para MySQL. Se recomienda usar un usuario con permisos restringidos por seguridad. Se necesita obtener una API KEY de OpenAI [aqui](https://platform.openai.com/api-keys).
+Este proyecto necesita de una base de datos SQL (MySQL, PostGres, SQLServer). La URI debe estar escrita en el archivo `.env`. En la platilla de archivo `.env.template` existe un ejemplo de URI para SQL Server. Se recomienda usar un usuario con permisos restringidos por seguridad. Se necesita obtener una API KEY de OpenAI [aqui](https://platform.openai.com/api-keys).
 
-`URI = 'mysql+pymysql://user:password@localhost:3306/sakila'`
+`URI = 'mssql+pyodbc://@localhost/A3ExportNominaClass?driver=ODBC+Driver+18+for+SQL+Server&trusted_connection=yes&TrustServerCertificate=yes'`
 
 `OPENAI_API_KEY = 'sk-WrrN..................'`
+
+Para conectar con SQL Server es necesario tener instalado el [ODBC Driver 17 o 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) (driver del sistema, no es una dependencia de pip). Puede comprobarse con `Get-OdbcDriver` en PowerShell. Si se usa autenticación Windows, se mantiene `trusted_connection=yes` sin usuario/contraseña en la URI; para login SQL, usar `mssql+pyodbc://usuario:password@servidor/basedatos?driver=...`.
 
 
 
 
 ## Proceso de instalación y uso
 
-1. Crear la base de datos de MySQL sakila. Puede hacerse desde [Workbench](https://www.mysql.com/products/workbench/):
-   ![workbench](https://raw.githubusercontent.com/YonatanRA/webinar_text2sql/refs/heads/main/images/import_db.png)
-
-   O también desde la terminal de sql con los siguientes comandos:
-   ```bash
-    mysql -u root -p 
-    ```
-
-    ```bash
-    mysql -u root -p sakila < sakila_sql/sakila.sql
-    ```
-
-2. Obtener URI de la base de datos de SQL y colocarla en el archivo `.env` (ejemplo en el archivo `.env.template`).
+1. Obtener URI de la base de datos de SQL y colocarla en el archivo `.env` (ejemplo en el archivo `.env.template`).
 
 
-3. Instalar dependencias. Se puede usar el archivo `uv.lock` con el siguiente comando:
+2. Instalar dependencias. Se puede usar el archivo `uv.lock` con el siguiente comando:
     ```bash
     uv sync
     ```
@@ -141,7 +128,41 @@ Este proyecto necesita de una base de datos SQL (MySQL, PostGres, SQLServer). La
     ```
 
 
-4. Levantar el front de chainlit con el siguiente comando:
+3. Levantar el front de chainlit con el siguiente comando:
     ```bash
     chainlit run front.py -w --port 8001
     ```
+
+## Arquitectura
+
+No sigue ni Clean Architecture ni Arquitectura Hexagonal (puertos y adaptadores). Es una **arquitectura en capas simple (monolito de script)**, muy típica de un proyecto demo/webinar, con separación funcional ligera pero sin las fronteras formales que exigen esos patrones.
+
+### Estructura real
+
+```mermaid
+graph TD
+    A["front.py (presentación)<br/>Chainlit"] --> B["chatbot/chatclass.py<br/>Text2SQL (orquestación + lógica)"]
+    B --> C["chatbot/prompts.py<br/>plantillas de prompt"]
+    B --> D["LangChain / SQLDatabase<br/>(acceso a datos)"]
+    B --> E["ChatOpenAI<br/>(proveedor LLM)"]
+    B --> F["tools/tools.py<br/>Logger"]
+    D --> G[("SQL Server /<br/>A3ExportNominaClass")]
+```
+
+### Por qué no es Clean/Hexagonal
+
+- **No hay inversión de dependencias real**: `Text2SQL` en `chatbot/chatclass.py` importa y usa directamente `create_engine`, `SQLDatabase`, `ChatOpenAI` — no hay interfaces/puertos abstractos que aíslen el dominio de SQLAlchemy, LangChain u OpenAI. Si mañana cambias de LLM o de librería SQL, tocas la clase de negocio directamente.
+- **No hay capa de dominio independiente**: no existen entidades/value objects ni casos de uso desacoplados de frameworks; todo vive en una única clase que mezcla reglas de negocio (reintentos, construcción de query, memoria conversacional) con detalles de infraestructura (engine, URI, LLM).
+- **Configuración leída donde se usa**: `os.getenv('URI')` se lee directamente en el módulo `chatbot/chatclass.py`, no hay una capa de configuración/inyección de dependencias.
+- **UI acoplada al caso de uso concreto**: `front.py` instancia `Text2SQL()` directamente y llama a `.main()`, sin ningún adaptador intermedio.
+
+### Qué sí tiene (capas ligeras, no estrictas)
+
+| Carpeta/archivo | Responsabilidad | Equivalente aproximado |
+|---|---|---|
+| `front.py` | Entrada/salida de usuario (Chainlit) | Capa de presentación |
+| `chatbot/chatclass.py` | Orquestación del flujo (generar SQL → ejecutar → responder) | Capa de aplicación/servicio (mezclada con infraestructura) |
+| `chatbot/prompts.py` | Plantillas de texto para el LLM | Configuración/recursos |
+| `tools/tools.py` | Logger genérico | Utilidad transversal |
+
+Es una separación por tipo de archivo/responsabilidad técnica, no por capas de arquitectura con reglas de dependencia (dominio no depende de infraestructura, etc.).

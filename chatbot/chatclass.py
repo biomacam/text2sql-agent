@@ -32,8 +32,8 @@ class Text2SQL:
 
         logger.info('Iniciar Chat')
         
-        self.tables = inspect(create_engine(URI)).get_table_names()
-        self.db = SQLDatabase.from_uri(URI, sample_rows_in_table_info=2, include_tables=self.tables)
+        self.tables = inspect(create_engine(URI)).get_table_names(schema='dbo')
+        self.db = SQLDatabase.from_uri(URI, schema='dbo', sample_rows_in_table_info=2, include_tables=self.tables)
         self.sql_query = None
         self.last_sql_query = None
         self.context = None
