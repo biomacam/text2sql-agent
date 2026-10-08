@@ -4,3 +4,4 @@ __pycache__/
 *.ipynb_checkpoints
 .chainlit
 chainlit.md
+.ruff_cache

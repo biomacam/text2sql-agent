@@ -102,11 +102,11 @@ Usaremos la base de datos [sakila](https://dev.mysql.com/doc/sakila/en/sakila-in
 
 ## Variables de entorno
 
-Este proyecto necesita de una base de datos SQL (MySQL, PostGres, SQLServer). La URI debe estar escrita en el archivo `.env`. En la platilla de archivo `.env.template` existe un ejemplo de URI para SQL Server. Se recomienda usar un usuario con permisos restringidos por seguridad. Se necesita obtener una API KEY de OpenAI [aqui](https://platform.openai.com/api-keys).
+Este proyecto necesita una base de datos SQL Server y acceso al agente FAB. Configura `URI`, `FAB_USER_ID`, `FAB_API_KEY` y `FAB_AGENT_URL` en `.env`; `.env.template` contiene ejemplos sin credenciales reales. Se recomienda usar un usuario de base de datos con permisos restringidos.
 
 `URI = 'mssql+pyodbc://@localhost/A3ExportNominaClass?driver=ODBC+Driver+18+for+SQL+Server&trusted_connection=yes&TrustServerCertificate=yes'`
 
-`OPENAI_API_KEY = 'sk-WrrN..................'`
+`FAB_AGENT_URL = 'https://.../agent/sql-agent/execute'`
 
 Para conectar con SQL Server es necesario tener instalado el [ODBC Driver 17 o 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) (driver del sistema, no es una dependencia de pip). Puede comprobarse con `Get-OdbcDriver` en PowerShell. Si se usa autenticación Windows, se mantiene `trusted_connection=yes` sin usuario/contraseña en la URI; para login SQL, usar `mssql+pyodbc://usuario:password@servidor/basedatos?driver=...`.
 
@@ -144,14 +144,14 @@ graph TD
     A["front.py (presentación)<br/>Chainlit"] --> B["chatbot/chatclass.py<br/>Text2SQL (orquestación + lógica)"]
     B --> C["chatbot/prompts.py<br/>plantillas de prompt"]
     B --> D["LangChain / SQLDatabase<br/>(acceso a datos)"]
-    B --> E["ChatOpenAI<br/>(proveedor LLM)"]
+    B --> E["Agente FAB<br/>(generación SQL y respuesta)"]
     B --> F["tools/tools.py<br/>Logger"]
     D --> G[("SQL Server /<br/>A3ExportNominaClass")]
 ```
 
 ### Por qué no es Clean/Hexagonal
 
-- **No hay inversión de dependencias real**: `Text2SQL` en `chatbot/chatclass.py` importa y usa directamente `create_engine`, `SQLDatabase`, `ChatOpenAI` — no hay interfaces/puertos abstractos que aíslen el dominio de SQLAlchemy, LangChain u OpenAI. Si mañana cambias de LLM o de librería SQL, tocas la clase de negocio directamente.
+- **No hay inversión de dependencias real**: `Text2SQL` en `chatbot/chatclass.py` importa y usa directamente `create_engine`, `SQLDatabase` y `requests` para llamar al agente FAB — no hay interfaces/puertos abstractos que aíslen el dominio de SQLAlchemy, LangChain o el proveedor LLM.
 - **No hay capa de dominio independiente**: no existen entidades/value objects ni casos de uso desacoplados de frameworks; todo vive en una única clase que mezcla reglas de negocio (reintentos, construcción de query, memoria conversacional) con detalles de infraestructura (engine, URI, LLM).
 - **Configuración leída donde se usa**: `os.getenv('URI')` se lee directamente en el módulo `chatbot/chatclass.py`, no hay una capa de configuración/inyección de dependencias.
 - **UI acoplada al caso de uso concreto**: `front.py` instancia `Text2SQL()` directamente y llama a `.main()`, sin ningún adaptador intermedio.
